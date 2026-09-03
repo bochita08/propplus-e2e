@@ -19,8 +19,11 @@ Tests E2E **mobile** (Appium + WebdriverIO + Mocha) para la app **PROP+**
 ```bash
 npm install
 npm run appium:doctor   # tiene que dar todo OK
-npx appium driver install uiautomator2
 ```
+
+El driver de Android (`appium-uiautomator2-driver`) ya está en `package.json`;
+`npm install` lo trae y Appium 3 lo autodetecta. **No** corras
+`appium driver install uiautomator2` (falla con "already installed").
 
 Copiá `.env.example` a `.env` y ajustá `ANDROID_DEVICE` con lo que devuelva `adb devices`.
 
