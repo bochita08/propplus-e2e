@@ -1,14 +1,7 @@
 import { S, byId, byText, demoUser } from './selectors';
 import { paso, ok, info } from './log';
 import { escribirEn, pantallaVisible, tocar } from './actions';
-
-/** En CI corremos contra el APK; local, dentro de Expo Go. */
-const MODO_APK = !!process.env.APPIUM_APP;
-const APP_ID = MODO_APK ? 'com.propplus.app' : (process.env.APPIUM_APP_PACKAGE as string);
-const DEEP_LINK = {
-  url: process.env.EXPO_DEV_URL as string,
-  package: process.env.APPIUM_APP_PACKAGE as string,
-};
+import { MODO_APK, reabrirApp } from './config';
 
 /**
  * Reinicia PROP+ desde cero para aislar cada test (el form de login arrastra
@@ -21,30 +14,25 @@ const APP_LISTA =
   '//*[@text="Iniciar sesión" or @text="Propiedades" or @text="Ingresá tus datos para continuar"]';
 
 export async function abrirApp(): Promise<void> {
-  if (MODO_APK) {
-    paso('Abro PROP+ (reinicio la app)');
-    await driver.execute('mobile: terminateApp', { appId: APP_ID });
-    await driver.pause(400);
-    await driver.execute('mobile: activateApp', { appId: APP_ID });
-    // Esperar a que pase el splash: el APK release en el emulador de CI tarda.
-    await $(APP_LISTA).waitForExist({ timeout: 60_000 });
-    await driver.pause(500);
-    info('PROP+ abierto');
-    return;
-  }
-
-  paso('Abro PROP+ (reinicio Expo Go)');
-  await driver.execute('mobile: terminateApp', { appId: DEEP_LINK.package });
-  await driver.pause(600);
-  await driver.execute('mobile: deepLink', DEEP_LINK);
-  await $(APP_LISTA).waitForExist({ timeout: 90_000 });
+  paso(MODO_APK ? 'Abro PROP+ (reinicio la app)' : 'Abro PROP+ (reinicio Expo Go)');
+  await reabrirApp();
+  // Esperar a que pase el splash: el APK release en el emulador de CI tarda,
+  // y en Expo Go el deep link puede tardar si Metro recién reconectó.
+  await $(APP_LISTA).waitForExist({ timeout: MODO_APK ? 60_000 : 90_000 });
   await driver.pause(500);
-  info('PROP+ abierto en Expo Go');
+  info(MODO_APK ? 'PROP+ abierto' : 'PROP+ abierto en Expo Go');
 }
 
-/** Oculta el teclado si está abierto. */
+/**
+ * Oculta el teclado si está abierto.
+ * Chequea `isKeyboardShown()` antes de mandar el comando: si no hay teclado,
+ * no hace nada (evita que Appium caiga a un back-press "a ciegas", que en
+ * emuladores con Autofill activo puede terminar sacando la app al home).
+ */
 export async function ocultarTeclado(): Promise<void> {
   try {
+    const visible = await driver.isKeyboardShown();
+    if (!visible) return;
     await driver.execute('mobile: hideKeyboard');
     info('Teclado oculto');
   } catch {

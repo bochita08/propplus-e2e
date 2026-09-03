@@ -1,13 +1,38 @@
 import { byText } from './selectors';
-import { paso, ok } from './log';
+import { paso, ok, aviso } from './log';
+import { APP_ID, reabrirApp } from './config';
 
 const TIMEOUT = 15_000;
+
+/**
+ * A veces (Autofill del sistema, un reconnect de Metro, etc.) la app termina
+ * en segundo plano en medio de un test. Si un `waitForDisplayed` falla,
+ * chequeamos eso antes de rendirnos: si la app no está en primer plano, la
+ * reabrimos y el que llamó puede reintentar una vez más antes de fallar de
+ * verdad.
+ */
+async function reabrirSiNoEstaEnPrimerPlano(): Promise<boolean> {
+  try {
+    const estado = (await driver.execute('mobile: queryAppState', { appId: APP_ID })) as number;
+    if (estado === 4) return false; // ya está en primer plano (ApplicationState.RUNNING_IN_FOREGROUND)
+  } catch {
+    /* si la consulta falla, probamos reabrir igual */
+  }
+  aviso('La app no está en primer plano, la reabro y reintento...');
+  await reabrirApp();
+  return true;
+}
 
 /** Toca un elemento, narrando la acción con un nombre legible. */
 export async function tocar(nombre: string, selector: string): Promise<void> {
   paso(`Toco ${nombre}`);
   const el = $(selector);
-  await el.waitForDisplayed({ timeout: TIMEOUT });
+  try {
+    await el.waitForDisplayed({ timeout: TIMEOUT });
+  } catch (e) {
+    if (!(await reabrirSiNoEstaEnPrimerPlano())) throw e;
+    await el.waitForDisplayed({ timeout: TIMEOUT });
+  }
   await el.click();
 }
 
@@ -22,7 +47,12 @@ export async function escribirEn(
 ): Promise<void> {
   paso(`Escribo "${valor}" en ${nombre}`);
   const el = $(selector);
-  await el.waitForDisplayed({ timeout: TIMEOUT });
+  try {
+    await el.waitForDisplayed({ timeout: TIMEOUT });
+  } catch (e) {
+    if (!(await reabrirSiNoEstaEnPrimerPlano())) throw e;
+    await el.waitForDisplayed({ timeout: TIMEOUT });
+  }
   await el.click();
   await el.clearValue();
   await el.addValue(valor);

@@ -5,7 +5,7 @@ Tests E2E **mobile** (Appium + WebdriverIO + Mocha) para la app **PROP+**
 
 ## Requisitos
 
-- Node 18+
+- Node 18+ y **git**
 - **Android Studio** instalado en la ruta por defecto
   (`C:\Program Files\Android\Android Studio`) + un emulador creado (ej. `Pixel_9`)
 
@@ -13,6 +13,11 @@ Tests E2E **mobile** (Appium + WebdriverIO + Mocha) para la app **PROP+**
 > autodetecta en `shared/env.ts` (Java lo toma del que trae Android Studio, el
 > SDK de `%LOCALAPPDATA%\Android\Sdk`). Si Android Studio está en otra ruta,
 > seteá `JAVA_HOME` a mano y listo — nunca toques `PATH` con `setx`.
+
+> Con eso alcanza. `npm run local` (más abajo) se encarga solo de clonar el
+> repo de la app (`../claudio`) si no está, instalar `node_modules` de los dos
+> repos si faltan, crear `.env` desde `.env.example`, e instalar Expo Go en el
+> emulador la primera vez.
 
 ## Instalación
 
@@ -52,10 +57,12 @@ Bajar lo que dejó prendido (emulador + Metro):
 npm run local:stop
 ```
 
-> Requisitos: Android Studio instalado con **al menos un emulador creado**, y
-> **Expo Go** instalado en ese emulador (si no lo tenés: en `../claudio` corré
-> `npm run android` una vez). El repo de la app se busca en `../claudio`; si tiene
-> otro nombre, seteá `PROPPLUS_APP_DIR`.
+> Requisitos: Android Studio instalado con **al menos un emulador creado**.
+> Todo lo demás (clonar `../claudio` si no existe, `npm install` en los dos
+> repos, `.env`, Expo Go en el emulador) lo hace el script solo. El repo de la
+> app se busca en `../claudio`; si tiene otro nombre o ubicación, seteá
+> `PROPPLUS_APP_DIR` (y `PROPPLUS_APP_REPO` si además hay que clonarlo de otra
+> URL que no sea `bochita08/claudio`).
 
 ### Manual (si querés controlar cada paso)
 

@@ -1,7 +1,11 @@
 /**
- * Corre los tests E2E localmente haciendo TODO el setup solo:
+ * Corre los tests E2E localmente haciendo TODO el setup solo, de cero si hace falta:
+ *   0. clona el repo de la app (PROP+) si la carpeta no existe, e instala
+ *      node_modules (de este repo y del de la app) si faltan, y crea el .env
+ *      si no existe (a partir de .env.example)
  *   1. emulador Android (arranca uno si no hay ninguno)
- *   2. Metro / expo start en el repo de la app (si no está corriendo)
+ *   2. Metro / expo start en el repo de la app (si no está corriendo),
+ *      instalando Expo Go en el emulador solo si hace falta
  *   3. adb reverse tcp:8081
  *   4. los tests (wdio), pasándole el device real por ANDROID_DEVICE
  *
@@ -11,11 +15,14 @@
  *   npm run local -- --mochaOpts.grep "credenciales"
  *   npm run local:stop        (baja emulador + Metro)
  *
- * Requiere: Android Studio instalado (con un AVD creado) y Node 18+.
- * El repo de la app se busca en PROPPLUS_APP_DIR, ../claudio, .., ../../claudio.
+ * Requiere: Android Studio instalado (con un AVD creado), Node 18+ y git.
+ * El repo de la app se busca en PROPPLUS_APP_DIR, ../claudio, .., ../../claudio;
+ * si no aparece en ninguna, se clona en PROPPLUS_APP_DIR (o ../claudio si esa
+ * variable no está seteada) desde PROPPLUS_APP_REPO (por defecto el repo de
+ * bochita08/claudio).
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, copyFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -31,6 +38,9 @@ const die = (m) => {
   process.exit(1);
 };
 
+const npx = isWin ? 'npx.cmd' : 'npx';
+const npm = isWin ? 'npm.cmd' : 'npm';
+
 // ---------- rutas del SDK ----------
 const ANDROID_HOME =
   process.env.ANDROID_HOME ||
@@ -39,7 +49,6 @@ const ANDROID_HOME =
 const ADB = join(ANDROID_HOME, 'platform-tools', isWin ? 'adb.exe' : 'adb');
 const EMU_DIR = join(ANDROID_HOME, 'emulator');
 const EMULATOR = join(EMU_DIR, isWin ? 'emulator.exe' : 'emulator');
-const npx = isWin ? 'npx.cmd' : 'npx';
 
 const adb = (args, opts = {}) =>
   spawnSync(ADB, args, { encoding: 'utf8', ...opts });
@@ -62,13 +71,76 @@ if (process.argv[2] === 'stop') {
   process.exit(0);
 }
 
-// ---------- 1. SDK ----------
+// ---------- 0. SDK ----------
 if (!existsSync(ADB)) {
   die(
     `No encontré adb en:\n  ${ADB}\n` +
       `Instalá Android Studio, o seteá ANDROID_HOME a la carpeta del SDK.`,
   );
 }
+
+// ---------- 1. bootstrap: repo de la app + node_modules + .env ----------
+function ensureEnvFile() {
+  if (!existsSync('.env') && existsSync('.env.example')) {
+    copyFileSync('.env.example', '.env');
+    c.ok('Creé .env a partir de .env.example');
+  }
+}
+
+function ensureNodeModules(dir, label) {
+  if (existsSync(join(dir, 'node_modules'))) return;
+  c.step(`Instalando dependencias de ${label} (npm install en ${dir})...`);
+  const r = spawnSync(npm, ['install'], { cwd: dir, stdio: 'inherit', shell: isWin });
+  if (r.status !== 0) die(`"npm install" falló en ${dir}.`);
+  c.ok(`Dependencias de ${label} instaladas.`);
+}
+
+function findAppDir() {
+  const candidatos = [
+    process.env.PROPPLUS_APP_DIR,
+    resolve('..', 'claudio'),
+    resolve('..'),
+    resolve('..', '..', 'claudio'),
+  ].filter(Boolean);
+  for (const dir of candidatos) {
+    const appJson = join(dir, 'app.json');
+    if (existsSync(appJson)) {
+      try {
+        const j = JSON.parse(readFileSync(appJson, 'utf8'));
+        if (j?.expo?.slug === 'prop-plus') return dir;
+      } catch {
+        /* seguir */
+      }
+    }
+  }
+  return null;
+}
+
+function ensureAppDir() {
+  const encontrado = findAppDir();
+  if (encontrado) return encontrado;
+
+  const target = process.env.PROPPLUS_APP_DIR || resolve('..', 'claudio');
+  if (existsSync(target)) {
+    die(
+      `${target} existe pero no parece el repo de PROP+ (falta app.json con slug "prop-plus").\n` +
+        `Si el repo está en otro lado, seteá PROPPLUS_APP_DIR.`,
+    );
+  }
+  const repo = process.env.PROPPLUS_APP_REPO || 'https://github.com/bochita08/claudio.git';
+  c.step(`No encontré el repo de la app, clonando ${repo} en ${target} ...`);
+  const g = spawnSync('git', ['clone', repo, target], { stdio: 'inherit', shell: isWin });
+  if (g.status !== 0) {
+    die('No pude clonar el repo de la app (revisá que tengas git instalado y conexión a internet).');
+  }
+  c.ok('Repo de la app clonado.');
+  return target;
+}
+
+ensureEnvFile();
+ensureNodeModules(resolve('.'), 'propplus-e2e (este repo)');
+const appDir = ensureAppDir();
+ensureNodeModules(appDir, 'claudio (la app)');
 
 // ---------- 2. emulador ----------
 function devicesOnline() {
@@ -118,17 +190,25 @@ if (!device) {
 }
 c.ok(`Emulador: ${device}`);
 
-// ¿está Expo Go?
-const pkgs = adb(['-s', device, 'shell', 'pm', 'list', 'packages']).stdout || '';
-if (!pkgs.includes('host.exp.exponent')) {
-  c.warn(
-    'Expo Go no está instalado en el emulador.\n' +
-      '    Instalálo: en el repo de la app corré  npm run android  (una vez),\n' +
-      '    o abrí la Play Store del emulador y buscá "Expo Go".',
-  );
+// El Autofill / "Guardar contraseña" de Android suele robarle el foco a la
+// app justo después de tipear en un campo de contraseña (aparece un overlay
+// del sistema), y eso puede tirar la app al home mientras el test todavía
+// está tocando la pantalla. Lo desactivamos en el emulador para que los
+// tests de login sean confiables.
+adb(['-s', device, 'shell', 'settings', 'put', 'secure', 'autofill_service', 'null']);
+c.ok('Autofill de Android desactivado en el emulador.');
+
+// ---------- 3. Expo Go + Metro ----------
+function expoGoInstalado() {
+  const pkgs = adb(['-s', device, 'shell', 'pm', 'list', 'packages']).stdout || '';
+  return pkgs.includes('host.exp.exponent');
 }
 
-// ---------- 3. Metro ----------
+const teniaExpoGo = expoGoInstalado();
+if (!teniaExpoGo) {
+  c.warn('Expo Go no está en el emulador — lo instalo solo al arrancar Metro (puede tardar un par de minutos la primera vez).');
+}
+
 async function metroUp() {
   try {
     const r = await fetch('http://127.0.0.1:8081/status');
@@ -138,39 +218,22 @@ async function metroUp() {
   }
 }
 
-function findAppDir() {
-  const candidatos = [
-    process.env.PROPPLUS_APP_DIR,
-    resolve('..', 'claudio'),
-    resolve('..'),
-    resolve('..', '..', 'claudio'),
-  ].filter(Boolean);
-  for (const dir of candidatos) {
-    const appJson = join(dir, 'app.json');
-    if (existsSync(appJson)) {
-      try {
-        const j = JSON.parse(readFileSync(appJson, 'utf8'));
-        if (j?.expo?.slug === 'prop-plus') return dir;
-      } catch {
-        /* seguir */
-      }
-    }
-  }
-  return null;
-}
-
 if (await metroUp()) {
   c.ok('Metro ya corría en :8081');
-} else {
-  const appDir = findAppDir();
-  if (!appDir) {
-    die(
-      'No encontré el repo de la app (PROP+).\n' +
-        'Seteá PROPPLUS_APP_DIR, o arrancá Metro a mano:  cd ../claudio && npx expo start',
+  if (!teniaExpoGo) {
+    c.warn(
+      'Expo Go no está en el emulador y Metro ya estaba corriendo (no lo reinicio). ' +
+        'Corré  npm run android  en ../claudio, o abrí la Play Store del emulador y ' +
+        'buscá "Expo Go", y volvé a correr  npm run local.',
     );
   }
+} else {
   c.step(`Arrancando Metro en ${appDir} ...`);
-  const m = spawn(npx, ['expo', 'start'], {
+  // Si falta Expo Go, "expo start --android" lo instala solo (baja el APK
+  // correcto para el SDK del proyecto) y abre la app; si ya está, alcanza
+  // con levantar Metro nomás.
+  const args = teniaExpoGo ? ['expo', 'start'] : ['expo', 'start', '--android'];
+  const m = spawn(npx, args, {
     cwd: appDir,
     detached: true,
     stdio: 'ignore',
@@ -189,8 +252,32 @@ if (await metroUp()) {
     }
   }
   console.log();
-  if (!up) die('Metro no levantó (revisá que ../claudio tenga node_modules).');
+  if (!up) {
+    die('Metro no levantó (revisá que ../claudio tenga node_modules y que "npx expo start" corra sin errores a mano).');
+  }
   c.ok('Metro arriba (queda corriendo; para bajarlo:  npm run local:stop)');
+
+  if (!teniaExpoGo) {
+    process.stdout.write('  esperando que se instale Expo Go en el emulador');
+    let instalado = false;
+    for (let i = 0; i < 45; i++) {
+      await sleep(2000);
+      process.stdout.write('.');
+      if (expoGoInstalado()) {
+        instalado = true;
+        break;
+      }
+    }
+    console.log();
+    if (instalado) {
+      c.ok('Expo Go instalado.');
+    } else {
+      c.warn(
+        'Expo Go todavía no aparece instalado. Si los tests fallan por eso, abrí la Play ' +
+          'Store del emulador y buscá "Expo Go", o corré  npm run android  en ../claudio.',
+      );
+    }
+  }
 }
 
 // ---------- 4. adb reverse ----------
