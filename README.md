@@ -33,6 +33,9 @@ El driver de Android (`appium-uiautomator2-driver`) ya está en `package.json`;
 Copiá `.env.example` a `.env` y ajustá `ANDROID_DEVICE` con lo que devuelva `adb devices`.
 
 ## Cómo correr
+- Se recomienda tener Android estudio prendido y activo en un dispositivo > Device manayer > Play
+- Recorda tener en una misma carpeta el reporitorio de la app: Claudio : https://github.com/bochita08/claudio en conjunto tambien la carpeta de este repositorio.
+- Crear carpeta nueva > dentro de la consola >  git clone https://github.com/bochita08/claudio y tambien git clone https://github.com/bochita08/propplus-e2e 
 
 ### Automático (recomendado)
 
