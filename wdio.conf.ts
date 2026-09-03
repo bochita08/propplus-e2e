@@ -1,6 +1,7 @@
 import './shared/env'; // configura JAVA_HOME / ANDROID_HOME (debe ir primero)
 import 'dotenv/config';
 import { resolve } from 'node:path';
+import allure from '@wdio/allure-reporter';
 import type { Frameworks } from '@wdio/types';
 
 /**
@@ -100,9 +101,22 @@ export const config: WebdriverIO.Config = {
       console.log(`\x1b[42m\x1b[30m  OK  \x1b[0m ${test.title}\n`);
     } else {
       console.log(`\x1b[41m  FALLÓ  \x1b[0m ${test.title}`);
-      // El screenshot queda adjunto en el reporte Allure.
+      // Screenshot + textos visibles en pantalla, adjuntos al reporte Allure
+      // (clave para debuggear en CI: qué se estaba viendo cuando falló).
       try {
         await browser.takeScreenshot();
+      } catch {
+        /* sin sesión */
+      }
+      try {
+        const src = await browser.getPageSource();
+        const textos = [...src.matchAll(/text="([^"]+)"/g)]
+          .map((m) => m[1])
+          .filter((t) => t.trim())
+          .join('\n');
+        console.log('\x1b[90m--- textos en pantalla al fallar ---\x1b[0m\n' + textos);
+        allure.addAttachment('Textos en pantalla', textos, 'text/plain');
+        allure.addAttachment('Page source', src, 'application/xml');
       } catch {
         /* sin sesión */
       }

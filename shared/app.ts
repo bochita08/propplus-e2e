@@ -16,13 +16,19 @@ const DEEP_LINK = {
  *  - APK: terminate + activate com.propplus.app (abre en el login).
  *  - Expo Go: terminate Expo Go + deep link al proyecto.
  */
+// Alguna de estas pantallas significa "la app terminó de cargar" (pasó el splash).
+const APP_LISTA =
+  '//*[@text="Iniciar sesión" or @text="Propiedades" or @text="Ingresá tus datos para continuar"]';
+
 export async function abrirApp(): Promise<void> {
   if (MODO_APK) {
     paso('Abro PROP+ (reinicio la app)');
     await driver.execute('mobile: terminateApp', { appId: APP_ID });
     await driver.pause(400);
     await driver.execute('mobile: activateApp', { appId: APP_ID });
-    await driver.pause(2500);
+    // Esperar a que pase el splash: el APK release en el emulador de CI tarda.
+    await $(APP_LISTA).waitForExist({ timeout: 60_000 });
+    await driver.pause(500);
     info('PROP+ abierto');
     return;
   }
@@ -31,7 +37,8 @@ export async function abrirApp(): Promise<void> {
   await driver.execute('mobile: terminateApp', { appId: DEEP_LINK.package });
   await driver.pause(600);
   await driver.execute('mobile: deepLink', DEEP_LINK);
-  await driver.pause(3500);
+  await $(APP_LISTA).waitForExist({ timeout: 90_000 });
+  await driver.pause(500);
   info('PROP+ abierto en Expo Go');
 }
 
@@ -52,9 +59,7 @@ export async function ocultarTeclado(): Promise<void> {
 export async function irALogin(): Promise<void> {
   await abrirApp();
 
-  const enLogin = await $(byText('Iniciar sesión'))
-    .isDisplayed()
-    .catch(() => false);
+  const enLogin = await $(byText('Iniciar sesión')).isExisting();
   if (enLogin) {
     ok('Ya estoy en la pantalla de login');
     return;
