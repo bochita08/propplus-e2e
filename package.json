@@ -4,6 +4,8 @@
   "private": true,
   "description": "Tests E2E mobile (Appium + WebdriverIO) para la app PROP+",
   "scripts": {
+    "local": "node scripts/run-local.mjs",
+    "local:stop": "node scripts/run-local.mjs stop",
     "test": "wdio run wdio.conf.ts",
     "test:spec": "wdio run wdio.conf.ts --spec",
     "test:grep": "wdio run wdio.conf.ts --mochaOpts.grep",

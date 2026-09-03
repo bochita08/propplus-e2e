@@ -29,28 +29,40 @@ Copiá `.env.example` a `.env` y ajustá `ANDROID_DEVICE` con lo que devuelva `a
 
 ## Cómo correr
 
-Necesitás 3 cosas prendidas antes de los tests:
+### Automático (recomendado)
 
-**1. Emulador** — desde Android Studio (Device Manager ▶) o:
+Un comando que hace **todo** el setup solo (arranca el emulador si no hay ninguno,
+levanta Metro en `../claudio` si no está corriendo, hace `adb reverse`, y usa el
+device que esté activo — ignora un `ANDROID_DEVICE` viejo del `.env`):
+
 ```bash
-"%ANDROID_HOME%\emulator\emulator" -avd Pixel_9
+npm run local
 ```
 
-**2. Metro de PROP+**:
+Filtrar:
+
 ```bash
-cd ..\claudio
-npx expo start
+npm run local -- --spec appium/tests/login.e2e.ts
+npm run local -- --mochaOpts.grep "credenciales"
 ```
 
-**3. Puente de puerto** (una vez por sesión):
+Bajar lo que dejó prendido (emulador + Metro):
+
 ```bash
-adb reverse tcp:8081 tcp:8081
+npm run local:stop
 ```
 
-**Después, los tests:**
-```bash
-npm test
-```
+> Requisitos: Android Studio instalado con **al menos un emulador creado**, y
+> **Expo Go** instalado en ese emulador (si no lo tenés: en `../claudio` corré
+> `npm run android` una vez). El repo de la app se busca en `../claudio`; si tiene
+> otro nombre, seteá `PROPPLUS_APP_DIR`.
+
+### Manual (si querés controlar cada paso)
+
+**1. Emulador** — Android Studio (Device Manager ▶) o `"%ANDROID_HOME%\emulator\emulator" -avd Pixel_9`
+**2. Metro** — `cd ..\claudio && npx expo start`
+**3. Puente de puerto** — `adb reverse tcp:8081 tcp:8081`
+**4. Tests** — `npm test`
 
 La consola sale narrada paso a paso (`▸ Toco el botón Ingresar`, `✓ Visible: "..."`).
 
