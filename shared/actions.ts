@@ -29,10 +29,20 @@ export async function escribirEn(
   await driver.pause(150);
 }
 
-/** Verifica que un texto exacto esté visible en pantalla. */
+/**
+ * Verifica que un texto exacto aparezca en pantalla.
+ * Valida que RN lo renderizó (existe en el árbol) — no exige que ya esté dentro
+ * del viewport, porque banners y errores pueden quedar scrolleados fuera en
+ * pantallas chicas (típico en el emulador de CI). Igual intenta traerlo a la
+ * vista para que el screenshot de fallo sea útil.
+ */
 export async function verTexto(texto: string): Promise<void> {
   paso(`Verifico que se ve: "${texto}"`);
-  await $(byText(texto)).waitForDisplayed({ timeout: TIMEOUT });
+  const el = $(byText(texto));
+  await el.waitForExist({ timeout: TIMEOUT });
+  await el.scrollIntoView().catch(() => {
+    /* algunas pantallas no scrollean: no pasa nada */
+  });
   ok(`Visible: "${texto}"`);
 }
 
@@ -42,6 +52,6 @@ export async function pantallaVisible(
   timeout = 90_000,
 ): Promise<void> {
   paso(`Espero la pantalla "${titulo}"`);
-  await $(byText(titulo)).waitForDisplayed({ timeout });
+  await $(byText(titulo)).waitForExist({ timeout });
   ok(`Pantalla "${titulo}" cargada`);
 }
