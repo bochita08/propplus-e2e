@@ -6,16 +6,18 @@
  */
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 
 const home = homedir();
+const esWindows = process.platform === 'win32';
 
 function primeroQueExiste(candidatos: string[]): string | undefined {
   return candidatos.filter(Boolean).find((p) => existsSync(p));
 }
 
 // ---- JAVA_HOME ----
-if (!process.env.JAVA_HOME || !existsSync(process.env.JAVA_HOME)) {
+// En CI (GitHub Actions) ya viene seteado por setup-java: si existe, no lo tocamos.
+if (esWindows && (!process.env.JAVA_HOME || !existsSync(process.env.JAVA_HOME))) {
   const java = primeroQueExiste([
     'C:\\Program Files\\Android\\Android Studio\\jbr',
     'C:\\Program Files\\Android\\Android Studio1\\jbr',
@@ -38,12 +40,15 @@ if (!process.env.ANDROID_HOME || !existsSync(process.env.ANDROID_HOME)) {
 }
 
 // ---- PATH del proceso (java + adb) ----
+// Separador correcto según SO (';' en Windows, ':' en Linux/CI).
 const extra = [
   process.env.JAVA_HOME && join(process.env.JAVA_HOME, 'bin'),
   process.env.ANDROID_HOME && join(process.env.ANDROID_HOME, 'platform-tools'),
-].filter(Boolean) as string[];
+].filter((p): p is string => Boolean(p) && existsSync(p as string));
 
-process.env.PATH = [...extra, process.env.PATH ?? ''].join(';');
+if (extra.length) {
+  process.env.PATH = [...extra, process.env.PATH ?? ''].join(delimiter);
+}
 
 if (!process.env.JAVA_HOME) {
   console.warn(

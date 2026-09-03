@@ -2,17 +2,31 @@ import { S, byId, byText, demoUser } from './selectors';
 import { paso, ok, info } from './log';
 import { escribirEn, pantallaVisible, tocar } from './actions';
 
+/** En CI corremos contra el APK; local, dentro de Expo Go. */
+const MODO_APK = !!process.env.APPIUM_APP;
+const APP_ID = MODO_APK ? 'com.propplus.app' : (process.env.APPIUM_APP_PACKAGE as string);
 const DEEP_LINK = {
   url: process.env.EXPO_DEV_URL as string,
   package: process.env.APPIUM_APP_PACKAGE as string,
 };
 
 /**
- * Reinicia Expo Go y vuelve a abrir PROP+ desde cero (JS fresco).
- * Aísla cada test: la pantalla de login se reusa entre navegaciones y arrastra
- * estado del formulario si no se recarga el bundle.
+ * Reinicia PROP+ desde cero para aislar cada test (el form de login arrastra
+ * estado si no se recarga).
+ *  - APK: terminate + activate com.propplus.app (abre en el login).
+ *  - Expo Go: terminate Expo Go + deep link al proyecto.
  */
 export async function abrirApp(): Promise<void> {
+  if (MODO_APK) {
+    paso('Abro PROP+ (reinicio la app)');
+    await driver.execute('mobile: terminateApp', { appId: APP_ID });
+    await driver.pause(400);
+    await driver.execute('mobile: activateApp', { appId: APP_ID });
+    await driver.pause(2500);
+    info('PROP+ abierto');
+    return;
+  }
+
   paso('Abro PROP+ (reinicio Expo Go)');
   await driver.execute('mobile: terminateApp', { appId: DEEP_LINK.package });
   await driver.pause(600);

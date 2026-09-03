@@ -1,6 +1,38 @@
 import './shared/env'; // configura JAVA_HOME / ANDROID_HOME (debe ir primero)
 import 'dotenv/config';
+import { resolve } from 'node:path';
 import type { Frameworks } from '@wdio/types';
+
+/**
+ * Dos modos:
+ *  - APK (CI): si está `APPIUM_APP`, instala ese .apk y abre com.propplus.app directo.
+ *  - Expo Go (local): sin `APPIUM_APP`, abre PROP+ dentro de Expo Go via deep link.
+ */
+const APK = process.env.APPIUM_APP;
+
+const capabilitiesApk = {
+  platformName: 'Android',
+  'appium:automationName': 'UiAutomator2',
+  'appium:app': APK ? resolve(APK) : undefined,
+  'appium:appPackage': 'com.propplus.app',
+  'appium:appActivity': '.MainActivity',
+  'appium:autoGrantPermissions': true,
+  'appium:newCommandTimeout': 240,
+  'appium:fullReset': false,
+} as const;
+
+const capabilitiesExpoGo = {
+  platformName: 'Android',
+  'appium:automationName': 'UiAutomator2',
+  'appium:udid': process.env.ANDROID_DEVICE,
+  'appium:appPackage': process.env.APPIUM_APP_PACKAGE, // host.exp.exponent (Expo Go)
+  'appium:appActivity': '.experience.HomeActivity',
+  'appium:appWaitActivity': '*',
+  // No reseteamos Expo Go (mantiene login / permisos entre corridas).
+  'appium:noReset': true,
+  'appium:autoGrantPermissions': true,
+  'appium:newCommandTimeout': 240,
+} as const;
 
 export const config: WebdriverIO.Config = {
   runner: 'local',
@@ -14,20 +46,7 @@ export const config: WebdriverIO.Config = {
   },
   maxInstances: 1,
 
-  capabilities: [
-    {
-      platformName: 'Android',
-      'appium:automationName': 'UiAutomator2',
-      'appium:udid': process.env.ANDROID_DEVICE,
-      'appium:appPackage': process.env.APPIUM_APP_PACKAGE, // host.exp.exponent (Expo Go)
-      'appium:appActivity': '.experience.HomeActivity',
-      'appium:appWaitActivity': '*',
-      // No reseteamos Expo Go (mantiene login / permisos entre corridas).
-      'appium:noReset': true,
-      'appium:autoGrantPermissions': true,
-      'appium:newCommandTimeout': 240,
-    },
-  ],
+  capabilities: [APK ? capabilitiesApk : capabilitiesExpoGo],
 
   // WDIO levanta y baja el server de Appium solo.
   services: [
